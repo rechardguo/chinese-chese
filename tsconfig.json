@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@renderer/*": ["./src/renderer/*"],
+      "@components/*": ["./src/renderer/components/*"],
+      "@pages/*": ["./src/renderer/pages/*"],
+      "@stores/*": ["./src/renderer/stores/*"],
+      "@hooks/*": ["./src/renderer/hooks/*"],
+      "@lib/*": ["./src/renderer/lib/*"]
+    }
+  },
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.tsx",
+    "src/shared/**/*.ts",
+    "vite.config.ts"
+  ]
+}
