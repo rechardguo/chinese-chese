@@ -22,6 +22,7 @@ export default function App() {
   const { handleRemoteMove, setLanConnected, resign, gameMode } = useGameStore()
   const [lanUndoState, setLanUndoState] = useState<LanUndoState>('idle')
   const [lanMessages, setLanMessages] = useState<LanChatMessage[]>([])
+  const [opponentResigned, setOpponentResigned] = useState(false)
 
   useEffect(() => {
     const unsubMsg = window.api.lan.onMessage((msg: LANMessage) => {
@@ -29,6 +30,7 @@ export default function App() {
         handleRemoteMove(msg.iccs)
       } else if (msg.type === 'resign') {
         resign()
+        setOpponentResigned(true)
       } else if (msg.type === 'undo-request') {
         setLanUndoState('incoming')
       } else if (msg.type === 'undo-accept') {
@@ -55,15 +57,23 @@ export default function App() {
     }
   }, [handleRemoteMove, setLanConnected, resign])
 
+  const backToLanLobby = () => {
+    useGameStore.getState().initNewGame('pvp')
+    setLanMessages([])
+    setLanUndoState('idle')
+    setOpponentResigned(false)
+    setCurrentPage('lan')
+  }
+
   const isLanPlaying = currentPage === 'lan' && gameMode === 'lan'
 
   const renderPage = () => {
     switch (currentPage) {
       case 'play':
-        return <PlayPage lanUndoState={lanUndoState} onLanUndoStateChange={setLanUndoState} lanMessages={lanMessages} onLanChat={(text) => setLanMessages(prev => [...prev, { text, fromMe: true }])} />
+        return <PlayPage lanUndoState={lanUndoState} onLanUndoStateChange={setLanUndoState} lanMessages={lanMessages} onLanChat={(text) => setLanMessages(prev => [...prev, { text, fromMe: true }])} onLanBack={backToLanLobby} opponentResigned={opponentResigned} />
       case 'lan':
         return isLanPlaying
-          ? <PlayPage lanUndoState={lanUndoState} onLanUndoStateChange={setLanUndoState} lanMessages={lanMessages} onLanChat={(text) => setLanMessages(prev => [...prev, { text, fromMe: true }])} />
+          ? <PlayPage lanUndoState={lanUndoState} onLanUndoStateChange={setLanUndoState} lanMessages={lanMessages} onLanChat={(text) => setLanMessages(prev => [...prev, { text, fromMe: true }])} onLanBack={backToLanLobby} opponentResigned={opponentResigned} />
           : <LanPage onNavigate={setCurrentPage} />
       case 'puzzle':
         return <PuzzlePage />
@@ -74,7 +84,7 @@ export default function App() {
       case 'settings':
         return <SettingsPage />
       default:
-        return <PlayPage lanUndoState={lanUndoState} onLanUndoStateChange={setLanUndoState} lanMessages={lanMessages} onLanChat={(text) => setLanMessages(prev => [...prev, { text, fromMe: true }])} />
+        return <PlayPage lanUndoState={lanUndoState} onLanUndoStateChange={setLanUndoState} lanMessages={lanMessages} onLanChat={(text) => setLanMessages(prev => [...prev, { text, fromMe: true }])} onLanBack={backToLanLobby} opponentResigned={opponentResigned} />
     }
   }
 

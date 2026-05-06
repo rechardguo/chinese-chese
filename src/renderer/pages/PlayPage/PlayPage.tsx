@@ -9,9 +9,11 @@ interface PlayPageProps {
   onLanUndoStateChange: (state: LanUndoState) => void
   lanMessages: LanChatMessage[]
   onLanChat: (text: string) => void
+  onLanBack: () => void
+  opponentResigned: boolean
 }
 
-export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessages, onLanChat }: PlayPageProps) {
+export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessages, onLanChat, onLanBack, opponentResigned }: PlayPageProps) {
   const {
     turn, status, moves, pieces,
     selectedPosition, legalMoves, currentMoveIndex,
@@ -168,13 +170,13 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10">
               <div className="bg-white px-6 py-3 rounded-lg shadow-xl border-2 border-gray-200 text-center">
                 <div className="text-lg font-bold text-gray-800">
-                  {status === 'red_wins' ? '红方获胜！' : status === 'black_wins' ? '黑方获胜！' : '和棋！'}
+                  {opponentResigned ? '对手认输！' : status === 'red_wins' ? '红方获胜！' : status === 'black_wins' ? '黑方获胜！' : '和棋！'}
                 </div>
                 <button
-                  onClick={() => setShowNewGameDialog(true)}
+                  onClick={() => { if (gameMode === 'lan') { onLanBack() } else { setShowNewGameDialog(true) } }}
                   className="mt-2 px-4 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
                 >
-                  再来一局
+                  {gameMode === 'lan' ? '返回大厅' : '再来一局'}
                 </button>
               </div>
             </div>
@@ -435,7 +437,7 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
                 取消
               </button>
               <button
-                onClick={() => { setShowResignConfirm(false); resign() }}
+                onClick={() => { setShowResignConfirm(false); resign(); onLanBack() }}
                 className="flex-1 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
               >
                 认输
