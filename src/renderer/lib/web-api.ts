@@ -26,7 +26,7 @@ function setupWsHandlers(socket: WebSocket) {
     try {
       const data = JSON.parse(e.data)
       if (data.type === '_opponent_joined') {
-        listeners.opponentConnected.forEach(cb => cb())
+        listeners.opponentConnected.forEach(cb => cb(data.color))
       } else if (data.type === '_opponent_left') {
         listeners.opponentDisconnected.forEach(cb => cb())
       } else if (data.type === '_room_list') {
@@ -108,9 +108,17 @@ export const webApi: ElectronAPI = {
       return new Promise<void>((resolve, reject) => {
         if (ws) { ws.close(); ws = null }
         const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
-        ws = new WebSocket(`${protocol}://${host}:${port}`)
-        ws.onopen = () => { setupWsHandlers(ws!); resolve() }
-        ws.onerror = () => reject(new Error('无法连接到服务器'))
+        const url = `${protocol}://${host}:${port}`
+        console.log('[LAN] connecting to:', url)
+        try {
+          ws = new WebSocket(url)
+        } catch (e) {
+          console.error('[LAN] WebSocket constructor failed:', e)
+          reject(new Error('无法创建连接'))
+          return
+        }
+        ws.onopen = () => { console.log('[LAN] connected'); setupWsHandlers(ws!); resolve() }
+        ws.onerror = (e) => { console.error('[LAN] connection error:', e); reject(new Error('无法连接到服务器')) }
       })
     },
 
@@ -133,13 +141,13 @@ export const webApi: ElectronAPI = {
     },
 
     joinRoom: (roomId: string) => {
-      return new Promise<void>((resolve, reject) => {
+      return new Promise<{ color: string }>((resolve, reject) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) { reject(new Error('未连接')); return }
         const handler = (e: MessageEvent) => {
           const data = JSON.parse(e.data)
           if (data.type === '_joined_room') {
             ws!.removeEventListener('message', handler)
-            resolve()
+            resolve({ color: data.color })
           } else if (data.type === '_error') {
             ws!.removeEventListener('message', handler)
             reject(new Error(data.message))

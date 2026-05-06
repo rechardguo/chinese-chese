@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback } from 'react'
 import type { BoardPosition, Piece, Color, Move } from '@shared/types/chess'
 import {
   CELL_SIZE, PADDING, PIECE_RADIUS, BOARD_WIDTH, BOARD_HEIGHT,
-  RIVER_TOP, RIVER_BOTTOM, boardToPixel, pixelToBoard, CROSS_MARK_POSITIONS
+  boardToPixel as _boardToPixel, pixelToBoard as _pixelToBoard, CROSS_MARK_POSITIONS
 } from '@shared/constants/board'
 import { PIECE_CHARS } from '@shared/constants/pieces'
 
@@ -37,6 +37,17 @@ const STYLES = {
   }
 }
 
+function toPixel(file: number, rank: number, flipped: boolean) {
+  const p = _boardToPixel(file, rank)
+  if (!flipped) return p
+  return { x: p.x, y: BOARD_HEIGHT - p.y }
+}
+
+function toBoard(px: number, py: number, flipped: boolean) {
+  if (!flipped) return _pixelToBoard(px, py)
+  return _pixelToBoard(px, BOARD_HEIGHT - py)
+}
+
 export default function ChessBoard({
   pieces,
   selectedPosition,
@@ -63,11 +74,11 @@ export default function ChessBoard({
     ctx.scale(dpr, dpr)
 
     const s = STYLES[boardStyle]
-    drawBoard(ctx, s, showCoords)
-    drawLastMove(ctx, lastMove, s)
-    drawLegalMoves(ctx, legalMoves)
-    drawPieces(ctx, pieces, selectedPosition, isCheck, turn, s)
-  }, [pieces, selectedPosition, legalMoves, lastMove, turn, isCheck, boardStyle, showCoords])
+    drawBoard(ctx, s, showCoords, flipped)
+    drawLastMove(ctx, lastMove, s, flipped)
+    drawLegalMoves(ctx, legalMoves, flipped)
+    drawPieces(ctx, pieces, selectedPosition, isCheck, turn, s, flipped)
+  }, [pieces, selectedPosition, legalMoves, lastMove, turn, isCheck, boardStyle, showCoords, flipped])
 
   useEffect(() => {
     draw()
@@ -81,9 +92,9 @@ export default function ChessBoard({
     const scaleY = BOARD_HEIGHT / rect.height
     const px = (e.clientX - rect.left) * scaleX
     const py = (e.clientY - rect.top) * scaleY
-    const pos = pixelToBoard(px, py)
+    const pos = toBoard(px, py, flipped)
     if (pos) onSquareClick(pos)
-  }, [onSquareClick])
+  }, [onSquareClick, flipped])
 
   return (
     <canvas
@@ -95,8 +106,7 @@ export default function ChessBoard({
   )
 }
 
-function drawBoard(ctx: CanvasRenderingContext2D, s: typeof STYLES.wooden, showCoords: boolean) {
-  // Background
+function drawBoard(ctx: CanvasRenderingContext2D, s: typeof STYLES.wooden, showCoords: boolean, flipped: boolean) {
   ctx.fillStyle = s.bg
   ctx.fillRect(0, 0, BOARD_WIDTH, BOARD_HEIGHT)
 
@@ -111,87 +121,85 @@ function drawBoard(ctx: CanvasRenderingContext2D, s: typeof STYLES.wooden, showC
   ctx.strokeStyle = s.line
   ctx.lineWidth = 1
 
-  // Horizontal lines
   for (let rank = 0; rank < 10; rank++) {
-    const y = PADDING + rank * CELL_SIZE
+    const y = toPixel(0, rank, flipped).y
     ctx.beginPath()
     ctx.moveTo(PADDING, y)
     ctx.lineTo(PADDING + 8 * CELL_SIZE, y)
     ctx.stroke()
   }
 
-  // Vertical lines (with river gap)
   for (let file = 0; file < 9; file++) {
     const x = PADDING + file * CELL_SIZE
     if (file === 0 || file === 8) {
-      // Edge lines: continuous
       ctx.beginPath()
       ctx.moveTo(x, PADDING)
       ctx.lineTo(x, PADDING + 9 * CELL_SIZE)
       ctx.stroke()
     } else {
-      // Inner lines: gap at river
+      const rt = toPixel(0, 4, flipped).y
+      const rb = toPixel(0, 5, flipped).y
       ctx.beginPath()
       ctx.moveTo(x, PADDING)
-      ctx.lineTo(x, RIVER_TOP)
+      ctx.lineTo(x, Math.min(rt, rb))
       ctx.stroke()
       ctx.beginPath()
-      ctx.moveTo(x, RIVER_BOTTOM)
+      ctx.moveTo(x, Math.max(rt, rb))
       ctx.lineTo(x, PADDING + 9 * CELL_SIZE)
       ctx.stroke()
     }
   }
 
   // Palace diagonals
-  ctx.beginPath()
-  ctx.moveTo(PADDING + 3 * CELL_SIZE, PADDING)
-  ctx.lineTo(PADDING + 5 * CELL_SIZE, PADDING + 2 * CELL_SIZE)
-  ctx.stroke()
-  ctx.beginPath()
-  ctx.moveTo(PADDING + 5 * CELL_SIZE, PADDING)
-  ctx.lineTo(PADDING + 3 * CELL_SIZE, PADDING + 2 * CELL_SIZE)
-  ctx.stroke()
-  ctx.beginPath()
-  ctx.moveTo(PADDING + 3 * CELL_SIZE, PADDING + 7 * CELL_SIZE)
-  ctx.lineTo(PADDING + 5 * CELL_SIZE, PADDING + 9 * CELL_SIZE)
-  ctx.stroke()
-  ctx.beginPath()
-  ctx.moveTo(PADDING + 5 * CELL_SIZE, PADDING + 7 * CELL_SIZE)
-  ctx.lineTo(PADDING + 3 * CELL_SIZE, PADDING + 9 * CELL_SIZE)
-  ctx.stroke()
+  const palaces = [
+    [3, 0, 5, 2], [5, 0, 3, 2],
+    [3, 7, 5, 9], [5, 7, 3, 9]
+  ]
+  for (const [f1, r1, f2, r2] of palaces) {
+    const a = toPixel(f1, r1, flipped)
+    const b = toPixel(f2, r2, flipped)
+    ctx.beginPath()
+    ctx.moveTo(a.x, a.y)
+    ctx.lineTo(b.x, b.y)
+    ctx.stroke()
+  }
 
   // River text
   ctx.font = 'bold 26px "KaiTi", "STKaiti", serif'
   ctx.fillStyle = s.riverText
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const riverY = (RIVER_TOP + RIVER_BOTTOM) / 2
-  ctx.fillText('楚 河', PADDING + 2 * CELL_SIZE, riverY)
-  ctx.fillText('汉 界', PADDING + 6 * CELL_SIZE, riverY)
+  const rt = toPixel(0, 4, flipped).y
+  const rb = toPixel(0, 5, flipped).y
+  const riverY = (rt + rb) / 2
+  ctx.fillText(flipped ? '汉 界' : '楚 河', PADDING + 2 * CELL_SIZE, riverY)
+  ctx.fillText(flipped ? '楚 河' : '汉 界', PADDING + 6 * CELL_SIZE, riverY)
 
-  // Cross marks at special positions
+  // Cross marks
   for (const pos of CROSS_MARK_POSITIONS) {
-    drawCrossMark(ctx, pos.file, pos.rank, s)
+    drawCrossMark(ctx, pos.file, pos.rank, s, flipped)
   }
 
   // Coordinate labels
   if (showCoords) {
     ctx.font = '13px "Microsoft YaHei", sans-serif'
     ctx.fillStyle = s.line
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  const blackLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
-  const redLabels = ['九', '八', '七', '六', '五', '四', '三', '二', '一']
-  for (let i = 0; i < 9; i++) {
-    const x = PADDING + i * CELL_SIZE
-    ctx.fillText(blackLabels[i], x, 12)
-    ctx.fillText(redLabels[i], x, BOARD_HEIGHT - 10)
-  }
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    const blackLabels = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+    const redLabels = ['九', '八', '七', '六', '五', '四', '三', '二', '一']
+    for (let i = 0; i < 9; i++) {
+      const x = PADDING + i * CELL_SIZE
+      const topY = toPixel(i, 9, flipped).y
+      const botY = toPixel(i, 0, flipped).y
+      ctx.fillText(flipped ? redLabels[i] : blackLabels[i], x, topY > botY ? topY + 13 : topY - 13)
+      ctx.fillText(flipped ? blackLabels[i] : redLabels[i], x, botY > topY ? botY + 13 : botY - 13)
+    }
   }
 }
 
-function drawCrossMark(ctx: CanvasRenderingContext2D, file: number, rank: number, s: typeof STYLES.wooden) {
-  const { x, y } = boardToPixel(file, rank)
+function drawCrossMark(ctx: CanvasRenderingContext2D, file: number, rank: number, s: typeof STYLES.wooden, flipped: boolean) {
+  const { x, y } = toPixel(file, rank, flipped)
   const size = 6
   const gap = 3
   ctx.strokeStyle = s.line
@@ -212,37 +220,22 @@ function drawCrossMark(ctx: CanvasRenderingContext2D, file: number, rank: number
   if (file < 8) { drawCorner(1, -1); drawCorner(1, 1) }
 }
 
-function drawLastMove(ctx: CanvasRenderingContext2D, lastMove: Move | null, s: typeof STYLES.wooden) {
+function drawLastMove(ctx: CanvasRenderingContext2D, lastMove: Move | null, s: typeof STYLES.wooden, flipped: boolean) {
   if (!lastMove) return
-
   ctx.fillStyle = s.line === '#8B7355' ? 'rgba(139, 115, 85, 0.25)' : 'rgba(92, 51, 23, 0.25)'
-
-  const from = boardToPixel(lastMove.from.file, lastMove.from.rank)
+  const from = toPixel(lastMove.from.file, lastMove.from.rank, flipped)
   ctx.fillRect(from.x - CELL_SIZE / 2, from.y - CELL_SIZE / 2, CELL_SIZE, CELL_SIZE)
-
-  const to = boardToPixel(lastMove.to.file, lastMove.to.rank)
+  const to = toPixel(lastMove.to.file, lastMove.to.rank, flipped)
   ctx.fillRect(to.x - CELL_SIZE / 2, to.y - CELL_SIZE / 2, CELL_SIZE, CELL_SIZE)
 }
 
-function drawLegalMoves(ctx: CanvasRenderingContext2D, legalMoves: BoardPosition[]) {
+function drawLegalMoves(ctx: CanvasRenderingContext2D, legalMoves: BoardPosition[], flipped: boolean) {
   for (const pos of legalMoves) {
-    const { x, y } = boardToPixel(pos.file, pos.rank)
-    const targetPiece = false // We'd need to check if there's a piece there
-
-    if (targetPiece) {
-      // Capture indicator: red ring
-      ctx.beginPath()
-      ctx.arc(x, y, PIECE_RADIUS + 2, 0, Math.PI * 2)
-      ctx.strokeStyle = 'rgba(220, 0, 0, 0.7)'
-      ctx.lineWidth = 3
-      ctx.stroke()
-    } else {
-      // Move indicator: green dot
-      ctx.beginPath()
-      ctx.arc(x, y, 8, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(0, 180, 0, 0.6)'
-      ctx.fill()
-    }
+    const { x, y } = toPixel(pos.file, pos.rank, flipped)
+    ctx.beginPath()
+    ctx.arc(x, y, 8, 0, Math.PI * 2)
+    ctx.fillStyle = 'rgba(0, 180, 0, 0.6)'
+    ctx.fill()
   }
 }
 
@@ -252,18 +245,15 @@ function drawPieces(
   selectedPosition: BoardPosition | null,
   isCheck: boolean,
   turn: Color,
-  s: typeof STYLES.wooden
+  s: typeof STYLES.wooden,
+  flipped: boolean
 ) {
-  // Draw pieces in order (bottom pieces first for layering)
   for (const { piece, position } of pieces) {
-    const { x, y } = boardToPixel(position.file, position.rank)
+    const { x, y } = toPixel(position.file, position.rank, flipped)
     const isSelected = selectedPosition !== null &&
       selectedPosition.file === position.file &&
       selectedPosition.rank === position.rank
-
-    // Check if this is the king in check
     const isKingInCheck = isCheck && piece.type === 'K' && piece.color === turn
-
     drawPiece(ctx, piece, x, y, isSelected, isKingInCheck, s)
   }
 }
@@ -280,13 +270,11 @@ function drawPiece(
   const isRed = piece.color === 'r'
   const mainColor = isRed ? s.red : s.black
 
-  // Shadow
   ctx.shadowColor = 'rgba(0,0,0,0.3)'
   ctx.shadowBlur = 4
   ctx.shadowOffsetX = 2
   ctx.shadowOffsetY = 2
 
-  // Piece body (outer circle)
   ctx.beginPath()
   ctx.arc(x, y, PIECE_RADIUS, 0, Math.PI * 2)
   const gradient = ctx.createRadialGradient(x - 4, y - 4, 2, x, y, PIECE_RADIUS)
@@ -295,27 +283,23 @@ function drawPiece(
   ctx.fillStyle = gradient
   ctx.fill()
 
-  // Reset shadow
   ctx.shadowColor = 'transparent'
   ctx.shadowBlur = 0
   ctx.shadowOffsetX = 0
   ctx.shadowOffsetY = 0
 
-  // Outer border
   ctx.beginPath()
   ctx.arc(x, y, PIECE_RADIUS, 0, Math.PI * 2)
   ctx.strokeStyle = mainColor
   ctx.lineWidth = 2.5
   ctx.stroke()
 
-  // Inner ring
   ctx.beginPath()
   ctx.arc(x, y, PIECE_RADIUS - 4, 0, Math.PI * 2)
   ctx.strokeStyle = mainColor
   ctx.lineWidth = 1
   ctx.stroke()
 
-  // Chinese character
   const char = PIECE_CHARS[piece.type][piece.color]
   ctx.font = `bold ${PIECE_RADIUS * 1.15}px "KaiTi", "STKaiti", "AR PL UKai CN", serif`
   ctx.textAlign = 'center'
@@ -323,7 +307,6 @@ function drawPiece(
   ctx.fillStyle = isRed ? s.red : s.black
   ctx.fillText(char, x, y + 1)
 
-  // Selection glow
   if (isSelected) {
     ctx.beginPath()
     ctx.arc(x, y, PIECE_RADIUS + 4, 0, Math.PI * 2)
@@ -332,7 +315,6 @@ function drawPiece(
     ctx.stroke()
   }
 
-  // Check indicator (red glow around king)
   if (isKingInCheck) {
     ctx.beginPath()
     ctx.arc(x, y, PIECE_RADIUS + 5, 0, Math.PI * 2)

@@ -83,10 +83,10 @@ export interface ElectronAPI {
   lan: {
     connect: (host: string, port?: number) => Promise<void>
     createRoom: (name?: string) => Promise<{ roomId: string }>
-    joinRoom: (roomId: string) => Promise<void>
+    joinRoom: (roomId: string) => Promise<{ color: string }>
     leaveRoom: () => Promise<void>
     send: (msg: LANMessage) => void
-    onOpponentConnected: (cb: () => void) => () => void
+    onOpponentConnected: (cb: (color: string) => void) => () => void
     onOpponentDisconnected: (cb: () => void) => () => void
     onMessage: (cb: (msg: LANMessage) => void) => () => void
     onRoomList: (cb: (rooms: { id: string; name: string; createdAt: number }[]) => void) => () => void

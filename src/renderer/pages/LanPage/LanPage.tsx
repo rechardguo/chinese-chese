@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useGameStore } from '../../stores/gameStore'
+import type { Color } from '@shared/types/chess'
 
 interface Room {
   id: string
   name: string
+  color: Color
   createdAt: number
 }
 
@@ -23,35 +25,38 @@ export default function LanPage({ onNavigate }: LanPageProps) {
   const host = location.hostname || 'localhost'
   const port = 19526
 
-  const doConnect = useCallback(() => {
+  const doConnect = useCallback((retries = 3) => {
     setConnecting(true)
     setError('')
     window.api.lan.connect(host, port)
       .then(() => { setConnected(true); setConnecting(false) })
       .catch(() => {
-        setConnected(false)
-        setConnecting(false)
-        setError(`无法连接服务器 (${host}:${port})，请先运行 node server.mjs`)
+        if (retries > 0) {
+          setTimeout(() => doConnect(retries - 1), 1000)
+        } else {
+          setConnected(false)
+          setConnecting(false)
+          setError(`无法连接服务器 (${host}:${port})`)
+        }
       })
-  }, [host])
+  }, [host, port])
 
-  // Auto-connect on mount
   useEffect(() => { doConnect() }, [doConnect])
 
-  // Listen for room list updates
   useEffect(() => {
     const unsub = window.api.lan.onRoomList((list) => setRooms(list))
     return unsub
   }, [])
 
-  // Listen for opponent connection (host side)
+  // Host: receive color when opponent joins
   useEffect(() => {
     if (status !== 'waiting') return
-    const unsub = window.api.lan.onOpponentConnected(() => {
+    const unsub = window.api.lan.onOpponentConnected((color: string) => {
+      console.log('[LAN] host received color:', color)
       setLanConnected(true)
-      initNewGame('lan', { playerColor: 'r' })
+      initNewGame('lan', { playerColor: color as Color })
       setStatus('idle')
-      onNavigate('play')
+      onNavigate('lan')
     })
     return unsub
   }, [status, initNewGame, setLanConnected, onNavigate])
@@ -73,12 +78,14 @@ export default function LanPage({ onNavigate }: LanPageProps) {
     setError('')
     setStatus('joining')
     try {
-      await window.api.lan.joinRoom(roomId)
+      const result = await window.api.lan.joinRoom(roomId)
+      console.log('[LAN] guest received color:', result?.color)
+      const color = result?.color || 'b'
       setLanConnected(true)
       setLanRoomInfo({ ip: host, port })
-      initNewGame('lan', { playerColor: 'b' })
+      initNewGame('lan', { playerColor: color as Color })
       setStatus('idle')
-      onNavigate('play')
+      onNavigate('lan')
     } catch (err: any) {
       setError(`加入失败: ${err.message}`)
       setStatus('idle')
@@ -117,11 +124,11 @@ export default function LanPage({ onNavigate }: LanPageProps) {
               等待对手加入...
             </div>
             <p className="text-gray-600 font-medium">{roomName}</p>
-            <p className="text-xs text-gray-400 mt-1">其他设备打开同一页面即可看到此房间</p>
+            <p className="text-xs text-gray-400 mt-2">对手加入后将随机分配红黑</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Room list first */}
+            {/* Room list */}
             <div>
               <h3 className="text-sm font-semibold text-gray-600 mb-2">
                 可加入的房间 {rooms.length > 0 && `(${rooms.length})`}
@@ -143,14 +150,13 @@ export default function LanPage({ onNavigate }: LanPageProps) {
                         </span>
                         <span className="font-medium text-gray-800">{room.name}</span>
                       </div>
-                      <span className="text-xs text-blue-600 font-medium">加入（执黑）→</span>
+                      <span className="text-xs text-blue-600 font-medium">加入 →</span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Divider */}
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-gray-200" />
               <span className="text-xs text-gray-400">或</span>
@@ -172,7 +178,7 @@ export default function LanPage({ onNavigate }: LanPageProps) {
                 disabled={status === 'creating'}
                 className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors shrink-0 disabled:opacity-50"
               >
-                创建（执红）
+                创建房间
               </button>
             </div>
           </div>

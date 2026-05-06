@@ -78,9 +78,12 @@ wss.on('connection', (ws) => {
         room.guest = ws
         ws._roomId = msg.roomId
         ws._role = 'guest'
-        room.host.send(JSON.stringify({ type: '_opponent_joined' }))
-        ws.send(JSON.stringify({ type: '_joined_room' }))
-        console.log(`  Guest joined room: ${room.name}`)
+        // Randomly assign colors
+        const hostColor = Math.random() < 0.5 ? 'r' : 'b'
+        const guestColor = hostColor === 'r' ? 'b' : 'r'
+        room.host.send(JSON.stringify({ type: '_opponent_joined', color: hostColor }))
+        ws.send(JSON.stringify({ type: '_joined_room', color: guestColor }))
+        console.log(`  Guest joined room: ${room.name} (host=${hostColor})`)
         broadcastRoomList()
       } else {
         const room = rooms.get(ws._roomId)

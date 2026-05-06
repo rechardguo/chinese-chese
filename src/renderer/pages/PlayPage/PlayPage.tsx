@@ -1,9 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useGameStore } from '../../stores/gameStore'
 import ChessBoard from '../../components/ChessBoard/ChessBoard'
 import MoveList from '../../components/MoveList/MoveList'
+import type { LanUndoState, LanChatMessage } from '../../App'
 
-export default function PlayPage() {
+interface PlayPageProps {
+  lanUndoState: LanUndoState
+  onLanUndoStateChange: (state: LanUndoState) => void
+  lanMessages: LanChatMessage[]
+  onLanChat: (text: string) => void
+}
+
+export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessages, onLanChat }: PlayPageProps) {
   const {
     turn, status, moves, pieces,
     selectedPosition, legalMoves, currentMoveIndex,
@@ -14,10 +22,23 @@ export default function PlayPage() {
   } = useGameStore()
 
   const [showNewGameDialog, setShowNewGameDialog] = useState(false)
+  const [showResignConfirm, setShowResignConfirm] = useState(false)
   const [newGameMode, setNewGameMode] = useState<'pvp' | 'pve'>('pvp')
   const [difficulty, setDifficulty] = useState(config.engineDifficulty)
   const [localPlayerColor, setLocalPlayerColor] = useState<'r' | 'b'>(config.playerColor)
   const [showSettings, setShowSettings] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [lanMessages])
+
+  const sendChat = () => {
+    const text = chatInput.trim()
+    if (!text) return
+    window.api.lan.send({ type: 'chat', text })
+    onLanChat(text)
+    setChatInput('')
+  }
 
   const lastMove = moves.length > 0 ? moves[moves.length - 1] : null
 
@@ -70,7 +91,7 @@ export default function PlayPage() {
       <div className="flex items-center justify-between px-4 py-2 bg-white border-b shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <h2 className="text-sm font-bold text-gray-800 shrink-0">
-            {gameMode === 'pvp' ? '双人对弈' : gameMode === 'lan' ? '联机对战' : '人机对弈'}
+            {gameMode === 'pvp' ? '双人对弈' : gameMode === 'lan' ? '对弈' : '人机对弈'}
           </h2>
           {gameMode === 'pve' && (
             <span className="text-xs text-gray-400 shrink-0">
@@ -81,34 +102,45 @@ export default function PlayPage() {
           {gameMode === 'lan' && (
             <span className={`text-xs shrink-0 ${lanConnected ? 'text-green-600' : 'text-red-500'}`}>
               {lanConnected
-                ? `已连接 | ${localPlayerColor === 'r' ? '你执红' : '你执黑'} | ${lanRoomInfo?.ip}:${lanRoomInfo?.port}`
+                ? `已连接 | ${playerColor === 'r' ? '你执红' : '你执黑'}`
                 : '未连接'}
             </span>
           )}
         </div>
         <div className="flex gap-2">
+          {gameMode !== 'lan' && (
+            <>
+              <button
+                onClick={() => setShowNewGameDialog(true)}
+                className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+              >
+                新游戏
+              </button>
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                className="px-4 py-1.5 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 transition-colors"
+              >
+                设置
+              </button>
+            </>
+          )}
           <button
-            onClick={() => setShowNewGameDialog(true)}
-            className="px-4 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
-          >
-            新游戏
-          </button>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className="px-4 py-1.5 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 transition-colors"
-          >
-            设置
-          </button>
-          <button
-            onClick={undoMove}
+            onClick={() => {
+              if (gameMode === 'lan') {
+                window.api.lan.send({ type: 'undo-request' })
+                onLanUndoStateChange('requested')
+              } else {
+                undoMove()
+              }
+            }}
             className="px-4 py-1.5 bg-gray-500 text-white text-sm rounded hover:bg-gray-600 transition-colors disabled:opacity-50"
-            disabled={moves.length === 0 || engineThinking || gameMode === 'lan'}
+            disabled={moves.length === 0 || engineThinking || lanUndoState === 'requested'}
           >
-            悔棋
+            {lanUndoState === 'requested' ? '等待同意...' : '悔棋'}
           </button>
           {gameMode === 'lan' && (
             <button
-              onClick={resign}
+              onClick={() => setShowResignConfirm(true)}
               className="px-4 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
             >
               认输
@@ -120,7 +152,7 @@ export default function PlayPage() {
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Board area */}
-        <div className="flex-1 flex items-center justify-center bg-gray-200 p-4 relative">
+        <div className="flex-1 flex items-center justify-center bg-gray-200 p-1 relative">
           {/* Engine thinking overlay */}
           {engineThinking && (
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10">
@@ -156,6 +188,7 @@ export default function PlayPage() {
             turn={turn}
             isCheck={isCheck}
             onSquareClick={handleSquareClick}
+            flipped={gameMode === 'lan' && playerColor === 'b'}
             boardStyle={boardStyle}
             showCoords={showCoords}
           />
@@ -236,18 +269,50 @@ export default function PlayPage() {
             </div>
           )}
 
-          <MoveList
-            moves={moves}
-            currentMoveIndex={currentMoveIndex}
-            onMoveClick={goToMove}
-          />
-
-          <div className="p-3 border-t bg-gray-50 text-xs text-gray-500">
-            <div className="flex justify-between mb-1">
-              <span>总走法: {moves.length}</span>
-              <span>模式: {gameMode === 'pvp' ? '双人' : gameMode === 'lan' ? '联机' : '人机'}</span>
-            </div>
+          <div className={`flex-1 min-h-0 ${gameMode === 'lan' ? '' : 'flex flex-col'}`}>
+            <MoveList
+              moves={moves}
+              currentMoveIndex={currentMoveIndex}
+              onMoveClick={goToMove}
+            />
           </div>
+
+          {/* LAN Chat */}
+          {gameMode === 'lan' && (
+            <div className="flex-1 border-t flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {lanMessages.length === 0 && (
+                  <p className="text-xs text-gray-300 text-center">发送消息给对手</p>
+                )}
+                {lanMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.fromMe ? 'justify-end' : 'justify-start'}`}>
+                    <span className={`inline-block px-2 py-1 rounded text-xs max-w-[80%] ${
+                      msg.fromMe ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {msg.text}
+                    </span>
+                  </div>
+                ))}
+                <div ref={chatEndRef} />
+              </div>
+              <div className="flex gap-1 p-2 border-t bg-gray-50">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat() } }}
+                  placeholder="输入消息..."
+                  className="flex-1 border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                <button
+                  onClick={sendChat}
+                  className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                >
+                  发送
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -352,6 +417,59 @@ export default function PlayPage() {
                   开始
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resign confirm dialog */}
+      {showResignConfirm && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-72 text-center">
+            <p className="text-lg font-bold text-gray-800 mb-4">确定认输？</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowResignConfirm(false)}
+                className="flex-1 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => { setShowResignConfirm(false); resign() }}
+                className="flex-1 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
+              >
+                认输
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Opponent undo request dialog */}
+      {lanUndoState === 'incoming' && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-72 text-center">
+            <p className="text-lg font-bold text-gray-800 mb-4">对手请求悔棋</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  window.api.lan.send({ type: 'undo-reject' })
+                  onLanUndoStateChange('idle')
+                }}
+                className="flex-1 py-2 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200"
+              >
+                拒绝
+              </button>
+              <button
+                onClick={() => {
+                  window.api.lan.send({ type: 'undo-accept' })
+                  undoMove()
+                  onLanUndoStateChange('idle')
+                }}
+                className="flex-1 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+              >
+                同意
+              </button>
             </div>
           </div>
         </div>

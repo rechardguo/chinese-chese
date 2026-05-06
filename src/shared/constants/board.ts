@@ -3,8 +3,8 @@ export const BOARD_FILES = 9    // a-i (columns)
 export const BOARD_RANKS = 10   // 0-9 (rows)
 
 // Rendering constants
-export const CELL_SIZE = 64
-export const PADDING = 68
+export const CELL_SIZE = 72
+export const PADDING = 72
 export const PIECE_RADIUS = CELL_SIZE * 0.42
 
 // Canvas size
