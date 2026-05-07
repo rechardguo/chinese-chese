@@ -1,4 +1,4 @@
-import type { ElectronAPI } from '@shared/types/ipc'
+import type { AppAPI } from '@shared/types/ipc'
 import type { Piece } from '@shared/types/chess'
 
 type Board = (Piece | null)[][]
@@ -15,10 +15,11 @@ function getAIWorker(): Worker {
 // --- WebSocket LAN implementation ---
 let ws: WebSocket | null = null
 const listeners = {
-  opponentConnected: [] as (() => void)[],
+  opponentConnected: [] as ((color: string) => void)[],
   opponentDisconnected: [] as (() => void)[],
   message: [] as ((msg: any) => void)[],
-  roomList: [] as ((rooms: any[]) => void)[]
+  roomList: [] as ((rooms: any[]) => void)[],
+  spectatorCount: [] as ((count: number) => void)[]
 }
 
 function setupWsHandlers(socket: WebSocket) {
@@ -31,6 +32,10 @@ function setupWsHandlers(socket: WebSocket) {
         listeners.opponentDisconnected.forEach(cb => cb())
       } else if (data.type === '_room_list') {
         listeners.roomList.forEach(cb => cb(data.rooms))
+      } else if (data.type === '_spectating') {
+        // Spectator has joined — no action needed, just confirmation
+      } else if (data.type === '_spectator_count') {
+        listeners.spectatorCount.forEach(cb => cb(data.count))
       } else if (data.type === '_error') {
         console.error('[LAN] error:', data.message)
       } else if (!data.type.startsWith('_')) {
@@ -48,7 +53,7 @@ function addListener(arr: any[], cb: any) {
   return () => { const i = arr.indexOf(cb); if (i >= 0) arr.splice(i, 1) }
 }
 
-export const webApi: ElectronAPI = {
+export const webApi: AppAPI = {
   engine: {
     start: async () => {},
     stop: async () => {},
@@ -162,6 +167,24 @@ export const webApi: ElectronAPI = {
       if (ws) { ws.close(); ws = null }
     },
 
+    spectateRoom: (roomId: string) => {
+      return new Promise<void>((resolve, reject) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) { reject(new Error('未连接')); return }
+        const handler = (e: MessageEvent) => {
+          const data = JSON.parse(e.data)
+          if (data.type === '_spectating') {
+            ws!.removeEventListener('message', handler)
+            resolve()
+          } else if (data.type === '_error') {
+            ws!.removeEventListener('message', handler)
+            reject(new Error(data.message))
+          }
+        }
+        ws.addEventListener('message', handler)
+        ws.send(JSON.stringify({ type: '_spectate_room', roomId }))
+      })
+    },
+
     send: (msg) => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(msg))
@@ -171,7 +194,8 @@ export const webApi: ElectronAPI = {
     onOpponentConnected: (cb) => addListener(listeners.opponentConnected, cb),
     onOpponentDisconnected: (cb) => addListener(listeners.opponentDisconnected, cb),
     onMessage: (cb) => addListener(listeners.message, cb),
-    onRoomList: (cb) => addListener(listeners.roomList, cb)
+    onRoomList: (cb) => addListener(listeners.roomList, cb),
+    onSpectatorCount: (cb: (count: number) => void) => addListener(listeners.spectatorCount, cb)
   }
 }
 

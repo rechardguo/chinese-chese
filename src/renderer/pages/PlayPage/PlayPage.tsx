@@ -18,7 +18,7 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
     turn, status, moves, pieces,
     selectedPosition, legalMoves, currentMoveIndex,
     gameMode, config, isCheck, engineThinking,
-    playerColor, lanConnected, lanRoomInfo,
+    playerColor, lanConnected, lanRoomInfo, isSpectator,
     boardStyle, showCoords,
     initNewGame, handleSquareClick, undoMove, goToMove, resign
   } = useGameStore()
@@ -42,12 +42,13 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
     setChatInput('')
   }
 
-  const lastMove = moves.length > 0 ? moves[moves.length - 1] : null
+  const lastMove = currentMoveIndex >= 0 ? moves[currentMoveIndex] : null
 
   const isMyTurn = gameMode !== 'lan' || turn === playerColor
 
   const getStatusText = () => {
     if (engineThinking) return 'AI 思考中...'
+    if (isSpectator) return '观战中 - ' + (turn === 'r' ? '红方走棋' : '黑方走棋')
     if (gameMode === 'lan' && !lanConnected) return '对手已断开连接'
     if (gameMode === 'lan' && !isMyTurn) return '等待对手走棋...'
     switch (status) {
@@ -103,9 +104,10 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
           <span className={`text-sm ${getStatusColor()} shrink-0`}>{getStatusText()}</span>
           {gameMode === 'lan' && (
             <span className={`text-xs shrink-0 ${lanConnected ? 'text-green-600' : 'text-red-500'}`}>
-              {lanConnected
-                ? `已连接 | ${playerColor === 'r' ? '你执红' : '你执黑'}`
-                : '未连接'}
+              {isSpectator
+                ? (lanConnected ? '观战中' : '未连接')
+                : (lanConnected ? `已连接 | ${playerColor === 'r' ? '你执红' : '你执黑'}` : '未连接')
+              }
             </span>
           )}
         </div>
@@ -126,6 +128,7 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
               </button>
             </>
           )}
+          {!isSpectator && (
           <button
             onClick={() => {
               if (gameMode === 'lan') {
@@ -140,7 +143,8 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
           >
             {lanUndoState === 'requested' ? '等待同意...' : '悔棋'}
           </button>
-          {gameMode === 'lan' && (
+          )}
+          {gameMode === 'lan' && !isSpectator && (
             <button
               onClick={() => setShowResignConfirm(true)}
               className="px-4 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
@@ -275,12 +279,12 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
             <MoveList
               moves={moves}
               currentMoveIndex={currentMoveIndex}
-              onMoveClick={goToMove}
+              onMoveClick={isGameOver ? goToMove : undefined}
             />
           </div>
 
           {/* LAN Chat */}
-          {gameMode === 'lan' && (
+          {gameMode === 'lan' && !isSpectator && (
             <div className="flex-1 border-t flex flex-col min-h-0">
               <div className="flex-1 overflow-y-auto p-2 space-y-1">
                 {lanMessages.length === 0 && (

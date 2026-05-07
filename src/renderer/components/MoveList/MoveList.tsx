@@ -4,7 +4,7 @@ import type { Move } from '@shared/types/chess'
 interface MoveListProps {
   moves: Move[]
   currentMoveIndex: number
-  onMoveClick: (index: number) => void
+  onMoveClick?: (index: number) => void
 }
 
 export default function MoveList({ moves, currentMoveIndex, onMoveClick }: MoveListProps) {
@@ -38,11 +38,13 @@ export default function MoveList({ moves, currentMoveIndex, onMoveClick }: MoveL
               return (
                 <button
                   key={index}
-                  onClick={() => onMoveClick(index)}
+                  onClick={onMoveClick ? () => onMoveClick(index) : undefined}
                   className={`w-full text-left px-2 py-1 rounded text-sm flex items-center gap-2 ${
                     index === currentMoveIndex
                       ? 'move-active bg-blue-100 text-blue-800'
-                      : 'hover:bg-gray-100 text-gray-700'
+                      : onMoveClick
+                        ? 'hover:bg-gray-100 text-gray-700'
+                        : 'text-gray-700 cursor-default'
                   }`}
                 >
                   {isRed && (

@@ -18,6 +18,7 @@ interface GameState {
   engineThinking: boolean
   playerColor: Color
   lanConnected: boolean
+  isSpectator: boolean
   lanRoomInfo: { ip: string; port: number } | null
   boardStyle: 'wooden' | 'classic' | 'minimal'
   showCoords: boolean
@@ -33,6 +34,7 @@ interface GameState {
   setLanRoomInfo: (info: { ip: string; port: number } | null) => void
   setBoardStyle: (style: 'wooden' | 'classic' | 'minimal') => void
   setShowCoords: (show: boolean) => void
+  setIsSpectator: (v: boolean) => void
   resign: () => void
 }
 
@@ -56,6 +58,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   engineThinking: false,
   playerColor: 'r',
   lanConnected: false,
+  isSpectator: false,
   lanRoomInfo: null,
   boardStyle: 'wooden' as 'wooden' | 'classic' | 'minimal',
   showCoords: true,
@@ -86,8 +89,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   handleSquareClick: (pos) => {
-    const { engine, selectedPosition, turn, gameMode, playerColor, engineThinking, lanConnected } = get()
+    const { engine, selectedPosition, turn, gameMode, playerColor, engineThinking, lanConnected, isSpectator } = get()
     if (engine.gameOver) return
+    if (isSpectator) return
     if (engineThinking) return
     if ((gameMode === 'pve' || gameMode === 'lan') && turn !== playerColor) return
 
@@ -164,7 +168,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   resign: () => {
-    const { turn, gameMode, lanConnected } = get()
+    const { turn, gameMode, lanConnected, isSpectator } = get()
+    if (isSpectator) return
     if (gameMode === 'lan' && lanConnected && window.api) {
       window.api.lan.send({ type: 'resign' })
     }
@@ -240,5 +245,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   setLanConnected: (connected) => { set({ lanConnected: connected }) },
   setLanRoomInfo: (info) => { set({ lanRoomInfo: info }) },
   setBoardStyle: (style) => { set({ boardStyle: style }) },
-  setShowCoords: (show) => { set({ showCoords: show }) }
+  setShowCoords: (show) => { set({ showCoords: show }) },
+  setIsSpectator: (v: boolean) => { set({ isSpectator: v }) }
 }))

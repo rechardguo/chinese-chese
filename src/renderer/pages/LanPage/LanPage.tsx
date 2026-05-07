@@ -7,6 +7,7 @@ interface Room {
   name: string
   status: 'waiting' | 'playing'
   createdAt: number
+  spectatorCount: number
 }
 
 interface LanPageProps {
@@ -20,11 +21,11 @@ export default function LanPage({ onNavigate }: LanPageProps) {
   const [status, setStatus] = useState<'idle' | 'creating' | 'waiting' | 'joining'>('idle')
   const [error, setError] = useState('')
   const [roomName, setRoomName] = useState('象棋房间')
-  const { initNewGame, setLanConnected, setLanRoomInfo } = useGameStore()
+  const { initNewGame, setLanConnected, setLanRoomInfo, setIsSpectator } = useGameStore()
 
   const host = location.hostname || 'localhost'
   const port = 19526
-
+ 
   const doConnect = useCallback((retries = 3) => {
     setConnecting(true)
     setError('')
@@ -39,13 +40,12 @@ export default function LanPage({ onNavigate }: LanPageProps) {
           setError(`无法连接服务器 (${host}:${port})`)
         }
       })
-  }, [host, port])
+  }, [host, port]) 
 
-  useEffect(() => { doConnect() }, [doConnect])
+  useEffect(() => { doConnect }, [doConnect])
 
   useEffect(() => {
-    const unsub = window.api.lan.onRoomList((list) => setRooms(list))
-    return unsub
+    window.api.lan.onRoomList((list) => setRooms(list))
   }, [])
 
   // Host: receive color when opponent joins
@@ -92,6 +92,20 @@ export default function LanPage({ onNavigate }: LanPageProps) {
     }
   }, [host, initNewGame, setLanConnected, setLanRoomInfo, onNavigate])
 
+  const handleSpectateRoom = useCallback(async (roomId: string) => {
+    setError('')
+    try {
+      await window.api.lan.spectateRoom(roomId)
+      setLanConnected(true)
+      setLanRoomInfo({ ip: host, port })
+      setIsSpectator(true)
+      initNewGame('lan', { playerColor: 'r' })
+      onNavigate('lan')
+    } catch (err: any) {
+      setError(`观战失败: ${err.message}`)
+    }
+  }, [host, initNewGame, setLanConnected, setLanRoomInfo, setIsSpectator, onNavigate])
+
   const waitingRooms = rooms.filter(r => r.status === 'waiting')
   const playingRooms = rooms.filter(r => r.status === 'playing')
 
@@ -113,8 +127,7 @@ export default function LanPage({ onNavigate }: LanPageProps) {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-gray-500">未连接到游戏服务器</p>
-                <p className="text-xs text-gray-400">请在终端运行: node server.mjs</p>
-                <button onClick={doConnect} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
+                <button onClick={()=>doConnect()} className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors">
                   重试连接
                 </button>
               </div>
@@ -127,7 +140,6 @@ export default function LanPage({ onNavigate }: LanPageProps) {
               等待对手加入...
             </div>
             <p className="text-gray-600 font-medium">{roomName}</p>
-            <p className="text-xs text-gray-400 mt-2">对手加入后将随机分配红黑</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -178,7 +190,17 @@ export default function LanPage({ onNavigate }: LanPageProps) {
                         </span>
                         <span className="font-medium text-gray-600">{room.name}</span>
                       </div>
-                      <span className="text-xs text-green-600 font-medium">对弈中</span>
+                      <div className="flex items-center gap-2">
+                        {room.spectatorCount > 0 && (
+                          <span className="text-xs text-gray-400">{room.spectatorCount}人观战</span>
+                        )}
+                        <button
+                          onClick={() => handleSpectateRoom(room.id)}
+                          className="text-xs bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition-colors"
+                        >
+                          观战
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

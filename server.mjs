@@ -44,7 +44,7 @@ function getLocalIP() {
 
 function getRoomList() {
   return [...rooms.entries()]
-    .map(([id, r]) => ({ id, name: r.name, status: r.guest ? 'playing' : 'waiting', createdAt: r.createdAt }))
+    .map(([id, r]) => ({ id, name: r.name, status: r.guest ? 'playing' : 'waiting', createdAt: r.createdAt, spectatorCount: r.spectators ? r.spectators.size : 0 }))
 }
 
 function broadcastRoomList() {
@@ -62,7 +62,7 @@ wss.on('connection', (ws) => {
       const msg = JSON.parse(raw.toString())
       if (msg.type === '_create_room') {
         const roomId = Date.now().toString(36)
-        rooms.set(roomId, { host: ws, guest: null, name: msg.name || '房间', createdAt: Date.now() })
+        rooms.set(roomId, { host: ws, guest: null, spectators: new Set(), moves: [], name: msg.name || '房间', createdAt: Date.now() })
         ws._roomId = roomId
         ws._role = 'host'
         ws.send(JSON.stringify({ type: '_room_created', roomId, name: msg.name }))
@@ -84,12 +84,41 @@ wss.on('connection', (ws) => {
         ws.send(JSON.stringify({ type: '_joined_room', color: guestColor }))
         console.log(`  Guest joined room: ${room.name} (host=${hostColor})`)
         broadcastRoomList()
+      } else if (msg.type === '_spectate_room') {
+        const room = rooms.get(msg.roomId)
+        if (!room || !room.guest) {
+          ws.send(JSON.stringify({ type: '_error', message: '房间不存在或未开始' }))
+          return
+        }
+        room.spectators.add(ws)
+        ws._roomId = msg.roomId
+        ws._role = 'spectator'
+        // Replay all recorded moves to the spectator
+        for (const moveMsg of room.moves) {
+          ws.send(JSON.stringify(moveMsg))
+        }
+        ws.send(JSON.stringify({ type: '_spectating' }))
+        const specCount = room.spectators.size
+        if (room.host && room.host.readyState === 1) room.host.send(JSON.stringify({ type: '_spectator_count', count: specCount }))
+        if (room.guest && room.guest.readyState === 1) room.guest.send(JSON.stringify({ type: '_spectator_count', count: specCount }))
+        console.log(`  Spectator joined room: ${room.name} (${specCount} watching)`)
+        broadcastRoomList()
       } else {
         const room = rooms.get(ws._roomId)
         if (!room) return
+        // Record move messages for spectator replay
+        if (msg.type === 'move' && ws._role !== 'spectator') {
+          room.moves.push(msg)
+        }
         const peer = ws._role === 'host' ? room.guest : room.host
         if (peer && peer.readyState === 1) {
           peer.send(JSON.stringify(msg))
+        }
+        // Forward to spectators
+        if (room.spectators && ws._role !== 'spectator') {
+          for (const spec of room.spectators) {
+            if (spec.readyState === 1) spec.send(JSON.stringify(msg))
+          }
         }
       }
     } catch { /* ignore */ }
@@ -97,10 +126,20 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     const room = rooms.get(ws._roomId)
-    if (room) {
+    if (!room) return
+    if (ws._role === 'spectator') {
+      room.spectators.delete(ws)
+      const specCount = room.spectators.size
+      if (room.host && room.host.readyState === 1) room.host.send(JSON.stringify({ type: '_spectator_count', count: specCount }))
+      if (room.guest && room.guest.readyState === 1) room.guest.send(JSON.stringify({ type: '_spectator_count', count: specCount }))
+      broadcastRoomList()
+    } else {
       const peer = ws._role === 'host' ? room.guest : room.host
       if (peer && peer.readyState === 1) {
         peer.send(JSON.stringify({ type: '_opponent_left' }))
+      }
+      for (const spec of room.spectators) {
+        if (spec.readyState === 1) spec.send(JSON.stringify({ type: '_opponent_left' }))
       }
       rooms.delete(ws._roomId)
       console.log(`  Room closed: ${ws._roomId}`)
