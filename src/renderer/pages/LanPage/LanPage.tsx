@@ -42,7 +42,7 @@ export default function LanPage({ onNavigate }: LanPageProps) {
       })
   }, [host, port]) 
 
-  useEffect(() => { doConnect }, [doConnect])
+  useEffect(() => { doConnect() }, [doConnect])
 
   useEffect(() => {
     window.api.lan.onRoomList((list) => setRooms(list))
