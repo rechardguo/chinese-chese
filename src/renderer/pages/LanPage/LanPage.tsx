@@ -5,7 +5,7 @@ import type { Color } from '@shared/types/chess'
 interface Room {
   id: string
   name: string
-  color: Color
+  status: 'waiting' | 'playing'
   createdAt: number
 }
 
@@ -92,10 +92,13 @@ export default function LanPage({ onNavigate }: LanPageProps) {
     }
   }, [host, initNewGame, setLanConnected, setLanRoomInfo, onNavigate])
 
+  const waitingRooms = rooms.filter(r => r.status === 'waiting')
+  const playingRooms = rooms.filter(r => r.status === 'playing')
+
   return (
     <div className="flex-1 flex items-center justify-center h-full bg-gray-100">
       <div className="bg-white rounded-xl shadow-lg p-8 w-[480px]">
-        <h2 className="text-xl font-bold text-gray-800 text-center mb-6">联机对战</h2>
+        <h2 className="text-xl font-bold text-gray-800 text-center mb-6">联机大厅</h2>
 
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
@@ -128,16 +131,16 @@ export default function LanPage({ onNavigate }: LanPageProps) {
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Room list */}
+            {/* Waiting rooms */}
             <div>
               <h3 className="text-sm font-semibold text-gray-600 mb-2">
-                可加入的房间 {rooms.length > 0 && `(${rooms.length})`}
+                等待加入 {waitingRooms.length > 0 && `(${waitingRooms.length})`}
               </h3>
-              {rooms.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">暂无房间</p>
+              {waitingRooms.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-3">暂无空闲房间</p>
               ) : (
                 <div className="space-y-2">
-                  {rooms.map((room) => (
+                  {waitingRooms.map((room) => (
                     <button
                       key={room.id}
                       onClick={() => handleJoinRoom(room.id)}
@@ -156,6 +159,31 @@ export default function LanPage({ onNavigate }: LanPageProps) {
                 </div>
               )}
             </div>
+
+            {/* Playing rooms */}
+            {playingRooms.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-600 mb-2">
+                  对弈中 ({playingRooms.length})
+                </h3>
+                <div className="space-y-2">
+                  {playingRooms.map((room) => (
+                    <div
+                      key={room.id}
+                      className="w-full flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-sm font-bold">
+                          {room.name.charAt(0)}
+                        </span>
+                        <span className="font-medium text-gray-600">{room.name}</span>
+                      </div>
+                      <span className="text-xs text-green-600 font-medium">对弈中</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-gray-200" />

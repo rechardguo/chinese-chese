@@ -44,8 +44,7 @@ function getLocalIP() {
 
 function getRoomList() {
   return [...rooms.entries()]
-    .filter(([, r]) => !r.guest)
-    .map(([id, r]) => ({ id, name: r.name, createdAt: r.createdAt }))
+    .map(([id, r]) => ({ id, name: r.name, status: r.guest ? 'playing' : 'waiting', createdAt: r.createdAt }))
 }
 
 function broadcastRoomList() {

@@ -7,7 +7,7 @@ interface SidebarProps {
 
 const menuItems = [
   { id: 'play', label: '对弈', icon: '♟' },
-  { id: 'lan', label: '联机对战', icon: '🌐' },
+  { id: 'lan', label: '联机大厅', icon: '🌐' },
   { id: 'puzzle', label: '杀法练习', icon: '🎯' },
   { id: 'opening', label: '开局定式', icon: '📖' },
   { id: 'analysis', label: '棋局分析', icon: '📊' },
