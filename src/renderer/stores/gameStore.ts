@@ -169,8 +169,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   resign: () => {
     const { turn, gameMode, lanConnected, isSpectator } = get()
-    if (isSpectator) return
-    if (gameMode === 'lan' && lanConnected && window.api) {
+    if (gameMode === 'lan' && lanConnected && !isSpectator && window.api) {
       window.api.lan.send({ type: 'resign' })
     }
     set({

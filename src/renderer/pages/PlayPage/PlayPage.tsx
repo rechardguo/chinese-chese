@@ -174,7 +174,7 @@ export default function PlayPage({ lanUndoState, onLanUndoStateChange, lanMessag
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10">
               <div className="bg-white px-6 py-3 rounded-lg shadow-xl border-2 border-gray-200 text-center">
                 <div className="text-lg font-bold text-gray-800">
-                  {opponentResigned ? '对手认输！' : status === 'red_wins' ? '红方获胜！' : status === 'black_wins' ? '黑方获胜！' : '和棋！'}
+                  {opponentResigned ? (isSpectator ? (turn === 'r' ? '红方认输！' : '黑方认输！') : '对手认输！') : status === 'red_wins' ? '红方获胜！' : status === 'black_wins' ? '黑方获胜！' : '和棋！'}
                 </div>
                 <button
                   onClick={() => { if (gameMode === 'lan') { onLanBack() } else { setShowNewGameDialog(true) } }}
